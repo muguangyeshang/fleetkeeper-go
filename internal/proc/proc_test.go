@@ -40,7 +40,7 @@ func TestVerifyPIDAcceptsTheRealChild(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 
 	// expect matches the child's own command line: verification passes.
-	info, err := VerifyPID(c.Process.Pid, "ping")
+	info, err := VerifyPID(c.Process.Pid, childExpect())
 	if err != nil {
 		t.Fatalf("verify refused a real child: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestRestartRunsACommand(t *testing.T) {
 	defer kill()
 	time.Sleep(300 * time.Millisecond)
 
-	info, err := Restart(c.Process.Pid, "ping", "ping -n 20 127.0.0.1")
+	info, err := Restart(c.Process.Pid, childExpect(), restartCommand())
 	if err != nil {
 		t.Fatalf("restart failed: %v", err)
 	}
@@ -106,4 +106,21 @@ func TestSplitCommandHonoursQuotes(t *testing.T) {
 	if len(got) != 3 || got[0] != `C:\Program Files\My App\svc.exe` || got[2] != "4002" {
 		t.Fatalf("quote-aware split broken: %#v", got)
 	}
+}
+
+// childExpect / restartCommand: the suite starts different long-lived
+// children per platform (ping on Windows, sleep on POSIX), so the
+// expectation must follow the platform, not the Windows favourite.
+func childExpect() string {
+	if runtime.GOOS == "windows" {
+		return "ping"
+	}
+	return "sleep"
+}
+
+func restartCommand() string {
+	if runtime.GOOS == "windows" {
+		return "ping -n 20 127.0.0.1"
+	}
+	return "sleep 20"
 }

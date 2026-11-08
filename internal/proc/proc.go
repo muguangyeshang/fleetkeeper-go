@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -40,16 +41,21 @@ type procInfo struct {
 func describe(pid int) (procInfo, error) {
 	info := procInfo{PID: pid}
 	if runtime.GOOS != "windows" {
-		out, err := exec.Command("ps", "-p", fmt.Sprint(pid), "-o", "comm=").Output()
+		// ps -o command= gives the FULL argument vector on both Linux and
+		// macOS; comm= only gives the image name ("sleep" not "sleep 30"),
+		// which made every substring verification fail on CI.
+		out, err := exec.Command("ps", "-p", fmt.Sprint(pid), "-o", "command=").Output()
 		if err != nil {
 			return info, fmt.Errorf("pid %d not running", pid)
 		}
-		name := strings.TrimSpace(string(out))
-		if name == "" {
+		cmdline := strings.TrimSpace(string(out))
+		if cmdline == "" {
 			return info, fmt.Errorf("pid %d not running", pid)
 		}
+		// Name is the image basename: strip the path, then the args.
+		name := filepath.Base(strings.Fields(cmdline)[0])
 		info.Name = name
-		info.Cmdline = name // POSIX ps comm is the best we get without /proc parsing
+		info.Cmdline = cmdline
 		return info, nil
 	}
 
