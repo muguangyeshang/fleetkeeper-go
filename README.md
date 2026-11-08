@@ -25,10 +25,21 @@ Same semantics as the Python original, different machinery:
   cooldown (survives green sweeps and process restarts by design),
   WAN gate (network down ⇒ record, never heal), pause markers
   (`<port>.paused`), consecutive-down threshold. 5 tests.
+- `internal/mcp` — **protocol-level health checks**: a JSON-RPC 2.0
+  `ping` / `tools/list` round-trip catches the failure mode port
+  watchers cannot see — a process holding its port open while the MCP
+  protocol inside is wedged. Verdicts: ok / wedged / refused, and the
+  elapsed time separates a timeout-shaped wedge from a fast refusal.
+  5 tests, including a real wedged server (accepts, never answers).
+- `internal/proc` — PID-verified process ops: `VerifyPID` reads the
+  command line via CIM (wmic is gone from current Windows) and refuses
+  a mismatched expectation; `Restart` verifies, stops, then starts the
+  configured command quote-aware with no shell and no window. 6 tests
+  against real child processes.
 - `cmd/fleetkeeper-go` — CLI: `-mode discover` prints JSON candidates,
-  `-mode guard` loops sweeps. Recovery-command wiring (PID-verified
-  restarts) lands next; the heal hook returns an explicit error instead
-  of a silent no-op until then.
+  `-mode guard` loops sweeps.
+
+CI: go vet + go test on ubuntu / windows / macos (Go 1.27).
 
 ## Build & run
 
@@ -44,7 +55,7 @@ go build -o fleetkeeper-go.exe ./cmd/fleetkeeper-go
 go test -v ./...
 ```
 
-11 tests, all against real loopback sockets — the Python suite's rule
+17 tests, all against real loopback sockets and real child processes — the Python suite's rule
 (mocks hide real bugs) carries over.
 
 ## License
