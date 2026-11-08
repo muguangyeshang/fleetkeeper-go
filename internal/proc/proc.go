@@ -9,11 +9,11 @@
 package proc
 
 import (
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -57,7 +57,7 @@ func describe(pid int) (procInfo, error) {
 		`(Get-CimInstance Win32_Process -Filter "ProcessId=%d") | `+
 			`Select-Object Name,CommandLine | ConvertTo-Json -Compress`, pid)
 	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	cmd.SysProcAttr = hiddenAttr()
 	out, err := cmd.Output()
 	if err != nil {
 		return info, fmt.Errorf("pid %d query failed: %w", pid, err)
@@ -66,7 +66,7 @@ func describe(pid int) (procInfo, error) {
 		Name        string `json:"Name"`
 		CommandLine string `json:"CommandLine"`
 	}
-	if err := jsonUnmarshal(out, &row); err != nil {
+	if err := json.Unmarshal(out, &row); err != nil {
 		return info, fmt.Errorf("pid %d answer unreadable: %w", pid, err)
 	}
 	if row.Name == "" {
