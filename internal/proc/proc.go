@@ -120,7 +120,7 @@ func Restart(pid int, expect, command string) (procInfo, error) {
 			return info, fmt.Errorf("restart command is empty")
 		}
 		start = exec.Command(parts[0], parts[1:]...)
-		start.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow}
+		start.SysProcAttr = hiddenAttr()
 	} else {
 		start = exec.Command("sh", "-c", command)
 	}
@@ -134,7 +134,7 @@ func Restart(pid int, expect, command string) (procInfo, error) {
 func stop(info procInfo) error {
 	if runtime.GOOS == "windows" {
 		cmd := exec.Command("taskkill", "/PID", fmt.Sprint(info.PID), "/T", "/F")
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		cmd.SysProcAttr = hiddenAttr()
 		return cmd.Run()
 	}
 	cmd := exec.Command("kill", fmt.Sprint(info.PID))
