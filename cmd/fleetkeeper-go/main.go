@@ -13,15 +13,20 @@ import (
 	"time"
 
 	"github.com/muguangyeshang/fleetkeeper-go/internal/discover"
+	"github.com/muguangyeshang/fleetkeeper-go/internal/scanner"
 	"github.com/muguangyeshang/fleetkeeper-go/internal/watchdog"
 )
 
 func main() {
 	ports := flag.String("ports", "", "comma-separated ports to scan/guard/report")
 	existing := flag.String("existing", "", "comma-separated ports already in config (marked, not auto-added)")
-	mode := flag.String("mode", "discover", "discover | guard | report")
+	mode := flag.String("mode", "discover", "discover | scan | guard | report")
 	timeout := flag.Duration("timeout", 600*time.Millisecond, "per-probe timeout")
 	workers := flag.Int("workers", 16, "concurrent probe workers")
+	host := flag.String("host", "127.0.0.1", "target host (scan mode)")
+	rate := flag.Int("rate", 0, "max connections per second, 0 = unlimited (scan mode)")
+	passiveWait := flag.Duration("passive-wait", 300*time.Millisecond, "server-first banner wait (scan mode)")
+	showClosed := flag.Bool("show-closed", false, "include closed ports in scan output")
 	cooldown := flag.Duration("cooldown", 180*time.Second, "per-port heal cooldown (guard mode)")
 	threshold := flag.Int("threshold", 2, "consecutive down sweeps before a heal (guard mode)")
 	interval := flag.Duration("interval", 60*time.Second, "report cadence (report mode)")
@@ -32,7 +37,7 @@ func main() {
 
 	list, err := parsePorts(*ports)
 	if err != nil || len(list) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: fleetkeeper-go -ports 11434,4002 [-mode guard|report] [-cloud http://host:8090 -token JWT]")
+		fmt.Fprintln(os.Stderr, "usage: fleetkeeper-go -ports 11434,4002 [-mode scan|guard|report] [-host 127.0.0.1 -rate 50] [-cloud http://host:8090 -token JWT]")
 		os.Exit(2)
 	}
 
@@ -40,6 +45,25 @@ func main() {
 	case "discover":
 		cands := discover.HTTPPorts(list, parseList(*existing), *timeout, *workers)
 		out, _ := json.MarshalIndent(cands, "", "  ")
+		fmt.Println(string(out))
+
+	case "scan":
+		// scanner 是独立模块：CLI 只负责把 argv 翻译成 Config 并打印结果。
+		results := scanner.Scan(scanner.Config{
+			Host:        *host,
+			Ports:       list,
+			Timeout:     *timeout,
+			PassiveWait: *passiveWait,
+			Workers:     *workers,
+			Rate:        *rate,
+		})
+		shown := results[:0]
+		for _, r := range results {
+			if r.Open || *showClosed {
+				shown = append(shown, r)
+			}
+		}
+		out, _ := json.MarshalIndent(shown, "", "  ")
 		fmt.Println(string(out))
 
 	case "guard":
@@ -74,7 +98,7 @@ func main() {
 		}
 
 	default:
-		fmt.Fprintln(os.Stderr, "-mode must be discover, guard or report")
+		fmt.Fprintln(os.Stderr, "-mode must be discover, scan, guard or report")
 		os.Exit(2)
 	}
 }
